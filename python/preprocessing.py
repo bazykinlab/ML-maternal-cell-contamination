@@ -72,7 +72,8 @@ def process_vcf(df, contamination_factor, return_idx=False):
     gt_dict = {
         '0/0': 0,
         '0/1': 1,
-        '1/1': 2
+        '1/1': 2,
+        '1/0': 1 # Phased
     }
 
     def split_gt(df, col_names): # Split genotype information
