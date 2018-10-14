@@ -3,13 +3,42 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+from copy import deepcopy
+
+from utils import match
 
 class VCF:
-    def __init__(self, filename, save_vcf=False):
+    def __init__(self, filename):
         self.df, self.header = read_vcf(filename, return_header=True)
+        self.df_processed = None
         
     def process(self, contamination_factor):
         self.df_processed, self.row_idx = process_vcf(self.df, contamination_factor, return_idx=True)
+
+    def save_predictions(self, preds, filename, sample_name):
+        df = deepcopy(self.df)
+        gt_dict = {
+            0: '0/0',
+            1: '0/1',
+            2: '1/1'
+        }
+        
+        rests = df.loc[self.row_idx, sample_name].apply(lambda s: ":".join(s.split(':')[1:]))
+        gt_new_str = np.vectorize(lambda gt: gt_dict[gt] + ":")(preds)
+        gt_new = [gt + rest for (gt, rest) in zip(gt_new_str, rests)]
+
+        df.loc[self.row_idx, sample_name] = gt_new
+        
+        with open(filename, 'w') as f:
+            for line in self.header:
+                f.write(line)
+
+        with open(filename, 'a') as f:
+            df.to_csv(filename, mode='a', index=False, header=False, sep='\t')
+
+    def prepare_input(self, target_cols=[]):
+        return prepare_input(self.df_processed, target_cols)
+
 
 def get_suffixes(data_dir):
     """
@@ -61,6 +90,7 @@ def index_by_chrom_and_pos(df):
     return df
 
 def process_vcf(df, contamination_factor, return_idx=False):
+    df = deepcopy(df)
     df = index_by_chrom_and_pos(df)
 
     def split_info(s): # For splitting 'INFO' field
@@ -78,22 +108,20 @@ def process_vcf(df, contamination_factor, return_idx=False):
 
     def split_gt(df, col_names): # Split genotype information
         fmts = df["FORMAT"].unique()
-        dfs = []
 
         for fmt in fmts:
-            df0 = df[df['FORMAT'] == fmt].copy()
+            
+            idx = (df['FORMAT'] == fmt).values
             fmt_list = fmt.split(':')
 
             for col_name in col_names:
                 for var in gt_cols:
                     assert var in fmt_list
                     var_index = fmt_list.index(var)
-                    df0[col_name + "^" + var] = df0[col_name].str.split(":").str[var_index]
+                    df.loc[idx, col_name + "^" + var] = df.loc[idx, col_name].str.split(":").str[var_index]
 
-            dfs.append(df0)
+        return df
 
-        df1= pd.concat(dfs, axis=0)
-        return df1  
 
     to_drop = ["INFO", "ID", "QUAL", "FILTER", "FORMAT"]
     field_names = ["#CHROM", "POS", "INFO", "INFO", "ID", "QUAL", "FILTER", "FORMAT", "REF", "ALT"]
@@ -108,15 +136,15 @@ def process_vcf(df, contamination_factor, return_idx=False):
     df.drop(sample_columns + to_drop,
             axis=1, inplace=True)
 
-    df.dropna(axis=0, inplace=True)
 
+    # df.dropna(axis=0, inplace=True)
     keep_rows = np.ones(df.shape[0])
     # Encoding genotypes as a label (labelling scheme provided by a dictionary)
     for col_name in filter(lambda col: col.endswith("GT"), df.columns.values): # Iterate on genotype columns
         keep_rows = np.logical_and(df[col_name].isin(['0/0', '0/1', '1/1']).values, keep_rows)
         df.replace({col_name: gt_dict}, inplace=True)
 
-    df = df[keep_rows]
+    df = df.loc[keep_rows]
         
     # Separating PL (posterior likelihood) scores into their own columns
     for col_name in filter(lambda col: col.endswith("PL"), df.columns.values):
@@ -164,6 +192,7 @@ def process_vcf(df, contamination_factor, return_idx=False):
     df.fillna(0, inplace=True)
     df['contamination'] = np.ones((df.shape[0],))*contamination_factor
     
+    df = df.reset_index(drop=True)
 
     if return_idx:
         return df, keep_rows
@@ -176,13 +205,17 @@ def load_suffix(suffix, data_dir):
     ab.process(contamination_factor)
     gt = VCF(data_dir + "justchild." + suffix)
     gt.process(contamination_factor)
+
+    for vcf in [ab, gt]:
+        vcf.df_processed = index_by_chrom_and_pos(vcf.df_processed)
+
     idx = ab.df_processed.index.intersection(gt.df_processed.index)
     ab.df_processed = ab.df_processed.loc[idx]
     gt.df_processed = gt.df_processed.loc[idx]
 
     ab.df_processed['justchild^GT'] = gt.df_processed['justchild^GT']
     
-    return ab.df_processed
+    return ab.df_processed.reset_index(drop=True)
 
 def load_suffixes(data_dir):
     df_cum = pd.DataFrame()
@@ -192,3 +225,8 @@ def load_suffixes(data_dir):
         df_cum = df_cum.append(df)
 
     return df_cum
+
+def prepare_input(df, target_cols=[]):
+    gt_cols = list(filter(match("GT", pos=-1), df.columns.values))
+    to_drop = list(set(['#CHROM', 'POS'] + gt_cols + target_cols))
+    return df.drop(to_drop, axis=1).values
