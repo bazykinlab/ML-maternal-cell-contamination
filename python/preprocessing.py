@@ -12,8 +12,8 @@ class VCF:
         self.df, self.header = read_vcf(filename, return_header=True)
         self.df_processed = None
         
-    def process(self, contamination_factor):
-        self.df_processed, self.row_idx = process_vcf(self.df, contamination_factor, return_idx=True)
+    def process(self, contamination_factor, mother, father, child):
+        self.df_processed, self.row_idx = process_vcf(self.df, contamination_factor, mother, father, child, return_idx=True)
 
     def save_predictions(self, preds, filename, sample_name):
         df = deepcopy(self.df)
@@ -89,7 +89,7 @@ def index_by_chrom_and_pos(df):
     df.index = pd.MultiIndex.from_arrays(df[['#CHROM', 'POS']].values.T)
     return df
 
-def process_vcf(df, contamination_factor, return_idx=False):
+def process_vcf(df, contamination_factor, mother, father, child, return_idx=False):
     df = deepcopy(df)
     df = index_by_chrom_and_pos(df)
 
@@ -125,8 +125,9 @@ def process_vcf(df, contamination_factor, return_idx=False):
 
     to_drop = ["INFO", "ID", "QUAL", "FILTER", "FORMAT"]
     field_names = ["#CHROM", "POS", "INFO", "INFO", "ID", "QUAL", "FILTER", "FORMAT", "REF", "ALT"]
-    sample_columns = [col_name for col_name in df.columns.values if col_name not in field_names]
-    
+    # sample_columns = [col_name for col_name in df.columns.values if col_name not in field_names]
+    sample_columns = [mother, father, child]
+
     info_dicts = df["INFO"].apply(split_info).values
 
     for field in ['AC', 'AF']:
@@ -179,10 +180,14 @@ def process_vcf(df, contamination_factor, return_idx=False):
         df[col_name] = np.vectorize(label_allele)(df[col_name].values)
 
     # One-hot encode genotypes
-    for col_name in filter(lambda x: x[-2:] == "GT", df.columns.values):
-        dummies = pd.get_dummies(df[col_name])
-        dummy_col_names = dummies.columns.values
-        df[[col_name + "^" + str(x) + "^1H" for x in dummy_col_names]] = dummies
+    # for col_name in filter(lambda x: x[-2:] == "GT", df.columns.values):
+    #     dummies = pd.get_dummies(df[col_name])
+    #     dummy_col_names = dummies.columns.values
+    #     df[[col_name + "^" + str(x) + "^1H" for x in dummy_col_names]] = dummies
+
+    for sample_name in sample_columns:
+        for gt_val in [0, 1, 2]:
+            df[sample_name + "^GT^" +str(gt_val)+ "^1H"] = df[sample_name+ "^GT"] == gt_val
         
     for col_name in filter(lambda col: col[-3:-1] == "PL", df.columns.values):
         df[col_name] = np.log10(df[col_name].values.astype(np.float)+1)
@@ -199,12 +204,12 @@ def process_vcf(df, contamination_factor, return_idx=False):
 
     return df
 
-def load_suffix(suffix, data_dir):
+def load_suffix(suffix, data_dir, keep_cols=['justchild^GT']):
     contamination_factor = float("0." + suffix.split(".")[1])
     ab = VCF(data_dir + "abortus." + suffix)
-    ab.process(contamination_factor)
+    ab.process(contamination_factor, "mother", "father", "abortus")
     gt = VCF(data_dir + "justchild." + suffix)
-    gt.process(contamination_factor)
+    gt.process(contamination_factor, "mother", "father", "justchild")
 
     for vcf in [ab, gt]:
         vcf.df_processed = index_by_chrom_and_pos(vcf.df_processed)
@@ -213,15 +218,16 @@ def load_suffix(suffix, data_dir):
     ab.df_processed = ab.df_processed.loc[idx]
     gt.df_processed = gt.df_processed.loc[idx]
 
-    ab.df_processed['justchild^GT'] = gt.df_processed['justchild^GT']
+    for col_name in keep_cols:
+        ab.df_processed[col_name] = gt.df_processed[col_name]
     
     return ab.df_processed.reset_index(drop=True)
 
-def load_suffixes(data_dir):
+def load_suffixes(data_dir, keep_cols=['justchild^GT']):
     df_cum = pd.DataFrame()
 
     for suffix in tqdm(get_suffixes(data_dir)):
-        df = load_suffix(suffix, data_dir)
+        df = load_suffix(suffix, data_dir, keep_cols=keep_cols)
         df_cum = df_cum.append(df)
 
     return df_cum
