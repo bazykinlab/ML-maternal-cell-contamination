@@ -8,14 +8,42 @@ from copy import deepcopy
 from utils import match
 
 class VCF:
+    """ Class for storing and processing a VCF and associated metadata
+    
+    Attributes:
+        df (pandas.DataFrame): Contents of VCF represented as a pandas dataframe
+        header ([str]): Header of VCF file represented as an array of strings
+        df_processed (pandas.DataFrame): Contents of VCF after preprocessing
+    """
     def __init__(self, filename):
+        """
+        Args:
+            filename (str): Name of VCF file to read from
+
+        """
         self.df, self.header = read_vcf(filename, return_header=True)
         self.df_processed = None
+        self.row_idx = None
         
     def process(self, contamination_factor, mother, father, child):
+        """ Preprocess a VCF read from a file
+
+        Args:
+            contamination_factor (float): Estimated contamination of the VCF file
+            mother (str): Name of column with mother's genotype information in VCF file
+            father (str): Name of column with father's genotype information in VCF file
+            child (str): Name of column with child's genotype information in VCF file
+        """
         self.df_processed, self.row_idx = process_vcf(self.df, contamination_factor, mother, father, child, return_idx=True)
 
-    def save_predictions(self, preds, filename, sample_name):
+    def save_predictions(self, preds, filename, child):
+        """ Save recalibrated VCF, given a list of predictions
+
+        Args:
+            preds (numpy.array): One-dimensional list of recalibrated genotypes (see process_vcf for convention)
+            filename (str): Name of output VCF file
+            child (str): Name of column with child's genotype information in VCF file
+        """
         df = deepcopy(self.df)
         gt_dict = {
             0: '0/0',
@@ -23,11 +51,11 @@ class VCF:
             2: '1/1'
         }
         
-        rests = df.loc[self.row_idx, sample_name].apply(lambda s: ":".join(s.split(':')[1:]))
+        rests = df.loc[self.row_idx, child].apply(lambda s: ":".join(s.split(':')[1:]))
         gt_new_str = np.vectorize(lambda gt: gt_dict[gt] + ":")(preds)
         gt_new = [gt + rest for (gt, rest) in zip(gt_new_str, rests)]
 
-        df.loc[self.row_idx, sample_name] = gt_new
+        df.loc[self.row_idx, child] = gt_new
         
         with open(filename, 'w') as f:
             for line in self.header:
@@ -43,7 +71,7 @@ class VCF:
 def get_suffixes(data_dir):
     """
     Scan a dir for pairs of vcf files with the naming scheme
-    `abortus/justchild.{suffix}.trio.vcf` and lists all suffixes
+    `abortus/justchild.{suffix}.trio.vcf` and list all suffixes
     """
     suffixes_ab = []
     suffixes_gt = []
@@ -60,7 +88,7 @@ def get_suffixes(data_dir):
 
 def read_vcf(vcf, return_header=False):
     """
-    Parse a vcf file ignoring the headers and load it into a pandas
+    Parse a vcf file, ignoring header by default,  and load it into a pandas
     dataframe.
     """
     def get_header_size(vcf):
@@ -86,10 +114,34 @@ def read_vcf(vcf, return_header=False):
     return df
 
 def index_by_chrom_and_pos(df):
+    """ Index a dataframe by the chromosome and position columns
+    """
     df.index = pd.MultiIndex.from_arrays(df[['#CHROM', 'POS']].values.T)
     return df
 
 def process_vcf(df, contamination_factor, mother, father, child, return_idx=False):
+    """ Pre-process a VCF dataframe to make it suitable for input into ML algorithms
+
+    Preprocessing consists of:
+    * Splitting the information in the "INFO" column, as well as the genotype columns for all
+      the samples.
+    * Splitting information in PL and AD columns
+    * Numerically encoding genotypes.
+    * One-hot encoding categorical features.
+    * Filtering out rows with unsuitable genotypes.
+
+    Args:
+        contamination_factor (float): Estimated contamination of the VCF file
+        mother (str): Name of column with mother's genotype information in VCF file
+        father (str): Name of column with father's genotype information in VCF file
+        child (str): Name of column with child's genotype information in VCF file
+        return_idx (bool): Whether or not to return a boolean list of row indices kept
+                           after preprocessing
+
+    Returns:
+        Pre-processed pandas.DataFrame and optionally a boolean list of row indices kept
+        after preprocessing.
+    """
     df = deepcopy(df)
     df = index_by_chrom_and_pos(df)
 
@@ -125,7 +177,6 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
 
     to_drop = ["INFO", "ID", "QUAL", "FILTER", "FORMAT"]
     field_names = ["#CHROM", "POS", "INFO", "INFO", "ID", "QUAL", "FILTER", "FORMAT", "REF", "ALT"]
-    # sample_columns = [col_name for col_name in df.columns.values if col_name not in field_names]
     sample_columns = [mother, father, child]
 
     info_dicts = df["INFO"].apply(split_info).values
@@ -137,8 +188,6 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
     df.drop(sample_columns + to_drop,
             axis=1, inplace=True)
 
-
-    # df.dropna(axis=0, inplace=True)
     keep_rows = np.ones(df.shape[0])
     # Encoding genotypes as a label (labelling scheme provided by a dictionary)
     for col_name in filter(lambda col: col.endswith("GT"), df.columns.values): # Iterate on genotype columns
@@ -180,10 +229,6 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
         df[col_name] = np.vectorize(label_allele)(df[col_name].values)
 
     # One-hot encode genotypes
-    # for col_name in filter(lambda x: x[-2:] == "GT", df.columns.values):
-    #     dummies = pd.get_dummies(df[col_name])
-    #     dummy_col_names = dummies.columns.values
-    #     df[[col_name + "^" + str(x) + "^1H" for x in dummy_col_names]] = dummies
 
     for sample_name in sample_columns:
         for gt_val in [0, 1, 2]:
@@ -192,7 +237,6 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
     for col_name in filter(lambda col: col[-3:-1] == "PL", df.columns.values):
         df[col_name] = np.log10(df[col_name].values.astype(np.float)+1)
 
-    # df.drop(["#CHROM", "POS"], axis=1, inplace=True)
     df = df.convert_objects(convert_numeric=True)
     df.fillna(0, inplace=True)
     df['contamination'] = np.ones((df.shape[0],))*contamination_factor
@@ -233,6 +277,11 @@ def load_suffixes(data_dir, keep_cols=['justchild^GT']):
     return df_cum
 
 def prepare_input(df, target_cols=[]):
+    """ Prepare a dataframe for input into ML methods by:
+    * Dropping non one-hot encoded genotype columns
+    * Dropping index columns
+    * Dropping any other columns indicated (for example, representing the target variable)
+    """
     gt_cols = list(filter(match("GT", pos=-1), df.columns.values))
     to_drop = list(set(['#CHROM', 'POS'] + gt_cols + target_cols))
     return df.drop(to_drop, axis=1).values

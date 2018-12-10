@@ -5,12 +5,26 @@ from sklearn.preprocessing import StandardScaler
 import pickle
 
 class Recalibrator:
+    """ Class to train, load and apply recalibrator models
+
+    Attributes:
+        model_lr: Logistic Regression model (scikit-learn)
+        model_xgb: XGBoost model
+    """
     def __init__(self):
+        """ Initialize classifiers
+        """
         self.model_lr = LogisticRegression(random_state=0)
         self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1)        
         self.scaler = StandardScaler()
 
     def train(self, X_train, y_train):
+        """ Strandardize training data and train models.
+
+        Args:
+            X_train (numpy.ndarray): independent variables of training data
+            Y_train (numpy.ndarray): dependent variables of training data
+        """
         self.scaler.fit(X_train)
         X_train_scaled = self.scaler.transform(X_train)
         print("Training logistic regression")
@@ -21,15 +35,34 @@ class Recalibrator:
         self.model_xgb.fit(X_train_red, y_train_red, eval_set=[(X_val, y_val)], early_stopping_rounds=20)
 
     def save(self, filename):
+        """ Serialize and save recalibrator object to a file
+
+        Args:
+            filename (str): name of file to save to
+        """
         with open(filename, 'wb') as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def load(self, filename):
+        """ Load recalibrator from a serialized file
+
+        Args:
+            filename (str): name of file to load from
+        """
         with open(filename, 'rb') as f:
             loaded = pickle.load(f)
             self.__dict__.update(loaded.__dict__)
 
     def predict(self, X, model):
+        """ Standardize input, and apply a model
+
+        Args:
+            X (numpy.ndarray): Input array
+
+        Returns:
+            Predicted genotypes (1d numpy array)
+        """
+
         X_transformed = self.scaler.transform(X)
         return model.predict(X_transformed)
 
