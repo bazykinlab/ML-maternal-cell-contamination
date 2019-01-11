@@ -1,8 +1,11 @@
 from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
+from sklearn.ensemble import VotingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import pickle
+
+from confidence_intervals import ConfidenceIntervalClassifier
 
 class Recalibrator:
     """ Class to train, load and apply recalibrator models
@@ -15,7 +18,10 @@ class Recalibrator:
         """ Initialize classifiers
         """
         self.model_lr = LogisticRegression(random_state=0)
-        self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1)        
+        self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1) 
+        self.model_ci = ConfidenceIntervalClassifier()
+        self.model_meta = VotingClassifier([('ci', ConfidenceIntervalClassifier()), ('lr', LogisticRegression(random_state=0)), ('xgb', XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1))],
+                                           voting='soft', weights=[1, 1, 2])
         self.scaler = StandardScaler()
 
     def train(self, X_train, y_train):
@@ -33,6 +39,9 @@ class Recalibrator:
         X_train_red, X_val, y_train_red, y_val = train_test_split(X_train_scaled, y_train, shuffle=True, random_state=0, train_size=0.8) 
         print("Training XGB")
         self.model_xgb.fit(X_train_red, y_train_red, eval_set=[(X_val, y_val)], early_stopping_rounds=20)
+
+        print("Training meta-classifier")
+        self.model_meta.fit(X_train, y_train)
 
     def save(self, filename):
         """ Serialize and save recalibrator object to a file
