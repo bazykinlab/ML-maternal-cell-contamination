@@ -21,7 +21,7 @@ class Recalibrator:
         self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1) 
         self.model_ci = ConfidenceIntervalClassifier()
         self.model_meta = VotingClassifier([('ci', ConfidenceIntervalClassifier()), ('lr', LogisticRegression(random_state=0)), ('xgb', XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1))],
-                                           voting='soft', weights=[1, 1, 2])
+                                           voting='soft')
         self.scaler = StandardScaler()
 
     def train(self, X_train, y_train):
