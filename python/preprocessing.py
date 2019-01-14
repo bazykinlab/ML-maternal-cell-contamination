@@ -237,7 +237,11 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
     for col_name in filter(lambda col: col[-3:-1] == "PL", df.columns.values):
         df[col_name] = np.log10(df[col_name].values.astype(np.float)+1)
 
-    df = df.convert_objects(convert_numeric=True)
+    # df = df.convert_objects(convert_numeric=True)
+    df = df.infer_objects()
+    for col in ["AC", "AF"] + [sample_name + "^" + suffix for sample_name in sample_columns for suffix in ["DP", "AD0", "AD1"]]:
+        df[col] = pd.to_numeric(df[col])
+
     df.fillna(0, inplace=True)
     df['contamination'] = np.ones((df.shape[0],))*contamination_factor
     
@@ -284,4 +288,4 @@ def prepare_input(df, target_cols=[]):
     """
     gt_cols = list(filter(match("GT", pos=-1), df.columns.values))
     to_drop = list(set(['#CHROM', 'POS'] + gt_cols + target_cols))
-    return df.drop(to_drop, axis=1).values
+    return df.drop(to_drop, axis=1).values.astype("float32")
