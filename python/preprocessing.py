@@ -6,6 +6,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from utils import match
+from contamination import calculate_contamination
 
 class VCF:
     """ Class for storing and processing a VCF and associated metadata
@@ -24,17 +25,27 @@ class VCF:
         self.df, self.header = read_vcf(filename, return_header=True)
         self.df_processed = None
         self.row_idx = None
+        self.estimated_contamination = None
         
-    def process(self, contamination_factor, mother, father, child):
+    def process(self, mother, father, child, contamination_factor=None):
         """ Preprocess a VCF read from a file
 
         Args:
-            contamination_factor (float): Estimated contamination of the VCF file
             mother (str): Name of column with mother's genotype information in VCF file
             father (str): Name of column with father's genotype information in VCF file
             child (str): Name of column with child's genotype information in VCF file
+            contamination_factor (float): Estimated contamination of the VCF file. Calculated if not given.
         """
-        self.df_processed, self.row_idx = process_vcf(self.df, contamination_factor, mother, father, child, return_idx=True)
+        if contamination_factor:
+            self.df_processed, self.row_idx = process_vcf(self.df, mother, father, child,
+                                                          contamination_factor=contamination_factor,
+                                                          return_idx=True)
+
+        else:
+            self.df_processed, self.row_idx = process_vcf(self.df, mother, father, child,
+                                                          return_idx=True)
+            self.estimated_contamination = calculate_contamination(self.df_processed, child, mother, father)
+            self.df_processed['contamination'] = self.estimated_contamination
 
     def save_predictions(self, preds, filename, child):
         """ Save recalibrated VCF, given a list of predictions
@@ -119,7 +130,7 @@ def index_by_chrom_and_pos(df):
     df.index = pd.MultiIndex.from_arrays(df[['#CHROM', 'POS']].values.T)
     return df
 
-def process_vcf(df, contamination_factor, mother, father, child, return_idx=False):
+def process_vcf(df, mother, father, child, contamination_factor=None, return_idx=False):
     """ Pre-process a VCF dataframe to make it suitable for input into ML algorithms
 
     Preprocessing consists of:
@@ -150,7 +161,7 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
         info_dict = {pair.split("=")[0]: pair.split("=")[1] for pair in info_list}
         return info_dict
     
-    gt_cols = ["GT", "DP", "PL", "AD"]
+    gt_cols = ["GT", "GQ", "DP", "PL", "AD"]
     gt_dict = {
         '0/0': 0,
         '0/1': 1,
@@ -239,11 +250,13 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
 
     # df = df.convert_objects(convert_numeric=True)
     df = df.infer_objects()
-    for col in ["AC", "AF"] + [sample_name + "^" + suffix for sample_name in sample_columns for suffix in ["DP", "AD0", "AD1"]]:
+    for col in ["AC", "AF"] + [sample_name + "^" + suffix for sample_name in sample_columns for suffix in ["GQ", "DP", "AD0", "AD1"]]:
         df[col] = pd.to_numeric(df[col])
 
     df.fillna(0, inplace=True)
-    df['contamination'] = np.ones((df.shape[0],))*contamination_factor
+    
+    if contamination_factor:
+        df['contamination'] = np.ones((df.shape[0],))*contamination_factor
     
     df = df.reset_index(drop=True)
 
@@ -255,9 +268,9 @@ def process_vcf(df, contamination_factor, mother, father, child, return_idx=Fals
 def load_suffix(suffix, data_dir, keep_cols=['justchild^GT']):
     contamination_factor = float("0." + suffix.split(".")[1])
     ab = VCF(data_dir + "abortus." + suffix)
-    ab.process(contamination_factor, "mother", "father", "abortus")
+    ab.process("mother", "father", "abortus", contamination_factor)
     gt = VCF(data_dir + "justchild." + suffix)
-    gt.process(contamination_factor, "mother", "father", "justchild")
+    gt.process("mother", "father", "justchild", contamination_factor)
 
     for vcf in [ab, gt]:
         vcf.df_processed = index_by_chrom_and_pos(vcf.df_processed)

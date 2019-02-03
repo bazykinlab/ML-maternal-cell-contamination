@@ -36,7 +36,7 @@ class Recalibrator:
         print("Training logistic regression")
         self.model_lr.fit(X_train_scaled, y_train)
         
-        X_train_red, X_val, y_train_red, y_val = train_test_split(X_train_scaled, y_train, shuffle=True, random_state=0, train_size=0.8) 
+        X_train_red, X_val, y_train_red, y_val = train_test_split(X_train_scaled, y_train, shuffle=True, random_state=0, train_size=0.8, test_size=0.2) 
         print("Training XGB")
         self.model_xgb.fit(X_train_red, y_train_red, eval_set=[(X_val, y_val)], early_stopping_rounds=20)
 
