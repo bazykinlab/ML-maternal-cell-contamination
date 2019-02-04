@@ -27,33 +27,33 @@ class VCF:
         self.row_idx = None
         self.estimated_contamination = None
         
-    def process(self, mother, father, child, contamination_factor=None):
+    def process(self, sample,  mother, father, contamination_factor=None):
         """ Preprocess a VCF read from a file
 
         Args:
+            sample (str): Name of column with sample's genotype information in VCF file
             mother (str): Name of column with mother's genotype information in VCF file
             father (str): Name of column with father's genotype information in VCF file
-            child (str): Name of column with child's genotype information in VCF file
             contamination_factor (float): Estimated contamination of the VCF file. Calculated if not given.
         """
         if contamination_factor:
-            self.df_processed, self.row_idx = process_vcf(self.df, mother, father, child,
+            self.df_processed, self.row_idx = process_vcf(self.df, sample, mother, father,
                                                           contamination_factor=contamination_factor,
                                                           return_idx=True)
 
         else:
-            self.df_processed, self.row_idx = process_vcf(self.df, mother, father, child,
+            self.df_processed, self.row_idx = process_vcf(self.df, sample, mother, father,
                                                           return_idx=True)
-            self.estimated_contamination = calculate_contamination(self.df_processed, child, mother, father)
+            self.estimated_contamination = calculate_contamination(self.df_processed, sample, mother, father)
             self.df_processed['contamination'] = self.estimated_contamination
 
-    def save_predictions(self, preds, filename, child):
+    def save_predictions(self, preds, filename, sample):
         """ Save recalibrated VCF, given a list of predictions
 
         Args:
             preds (numpy.array): One-dimensional list of recalibrated genotypes (see process_vcf for convention)
             filename (str): Name of output VCF file
-            child (str): Name of column with child's genotype information in VCF file
+            sample (str): Name of column with sample's genotype information in VCF file
         """
         df = deepcopy(self.df)
         gt_dict = {
@@ -62,11 +62,11 @@ class VCF:
             2: '1/1'
         }
         
-        rests = df.loc[self.row_idx, child].apply(lambda s: ":".join(s.split(':')[1:]))
+        rests = df.loc[self.row_idx, sample].apply(lambda s: ":".join(s.split(':')[1:]))
         gt_new_str = np.vectorize(lambda gt: gt_dict[gt] + ":")(preds)
         gt_new = [gt + rest for (gt, rest) in zip(gt_new_str, rests)]
 
-        df.loc[self.row_idx, child] = gt_new
+        df.loc[self.row_idx, sample] = gt_new
         
         with open(filename, 'w') as f:
             for line in self.header:
@@ -130,7 +130,7 @@ def index_by_chrom_and_pos(df):
     df.index = pd.MultiIndex.from_arrays(df[['#CHROM', 'POS']].values.T)
     return df
 
-def process_vcf(df, mother, father, child, contamination_factor=None, return_idx=False):
+def process_vcf(df, sample, mother, father, contamination_factor=None, return_idx=False):
     """ Pre-process a VCF dataframe to make it suitable for input into ML algorithms
 
     Preprocessing consists of:
@@ -145,7 +145,7 @@ def process_vcf(df, mother, father, child, contamination_factor=None, return_idx
         contamination_factor (float): Estimated contamination of the VCF file
         mother (str): Name of column with mother's genotype information in VCF file
         father (str): Name of column with father's genotype information in VCF file
-        child (str): Name of column with child's genotype information in VCF file
+        sample (str): Name of column with sample's genotype information in VCF file
         return_idx (bool): Whether or not to return a boolean list of row indices kept
                            after preprocessing
 
@@ -188,7 +188,7 @@ def process_vcf(df, mother, father, child, contamination_factor=None, return_idx
 
     to_drop = ["INFO", "ID", "QUAL", "FILTER", "FORMAT"]
     field_names = ["#CHROM", "POS", "INFO", "INFO", "ID", "QUAL", "FILTER", "FORMAT", "REF", "ALT"]
-    sample_columns = [mother, father, child]
+    sample_columns = [mother, father, sample]
 
     info_dicts = df["INFO"].apply(split_info).values
 
