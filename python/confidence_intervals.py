@@ -23,29 +23,31 @@ class ConfidenceIntervalClassifier(BaseEstimator, ClassifierMixin):
         return self
 
     def predict(self, X, y=None):
-        gts = np.argmax(X[:, -4:-1], axis=1)
+        gts = np.argmax(X[:, -10:-7], axis=1)
         predictions = deepcopy(gts)
         idx_hetero = (gts == 1)
         contaminations = X[:, -1].astype(np.float64)
-        dps = X[:, 6].astype(np.float64)
-        
-        ab_ad0 = X[:, 20].astype(np.float64)
-        ab_ad1 = X[:, 21].astype(np.float64)
-        mo_ad0 = X[:, 16].astype(np.float64)
-        mo_ad1 = X[:, 17].astype(np.float64)
-        
-        lower_bound = contaminations - self.z*np.sqrt(contaminations*(1 - contaminations)/dps)
-        upper_bound = contaminations + self.z*np.sqrt(contaminations*(1 - contaminations)/dps)
+        dps = X[:, 5].astype(np.float64)
 
-        idx_0 = idx_hetero & (ab_ad0/ab_ad1 > mo_ad0/mo_ad1)
-        mo_share = (2*ab_ad1/dps)
-        idx_0_confirmed = (mo_share > lower_bound) & (mo_share < upper_bound) & idx_0
-        predictions[idx_0_confirmed] = 0
+        
+        ab_ad0 = X[:, 19].astype(np.float64)
+        ab_ad1 = X[:, 20].astype(np.float64)
+        mo_ad0 = X[:, 21].astype(np.float64)
+        mo_ad1 = X[:, 22].astype(np.float64)
+        
+        with np.errstate(divide='ignore', invalid='ignore'):
+            lower_bound = contaminations - self.z*np.sqrt(contaminations*(1 - contaminations)/dps)
+            upper_bound = contaminations + self.z*np.sqrt(contaminations*(1 - contaminations)/dps)
 
-        idx_1 = idx_hetero & (ab_ad0/ab_ad1 < mo_ad0/mo_ad1)
-        mo_share = (2*ab_ad0/dps)
-        idx_1_confirmed = (mo_share > lower_bound) & (mo_share < upper_bound) & idx_1
-        predictions[idx_1_confirmed] = 2
+            idx_0 = idx_hetero & (ab_ad0/ab_ad1 > mo_ad0/mo_ad1)
+            mo_share = (2*ab_ad1/dps)
+            idx_0_confirmed = (mo_share > lower_bound) & (mo_share < upper_bound) & idx_0
+            predictions[idx_0_confirmed] = 0
+
+            idx_1 = idx_hetero & (ab_ad0/ab_ad1 < mo_ad0/mo_ad1)
+            mo_share = (2*ab_ad0/dps)
+            idx_1_confirmed = (mo_share > lower_bound) & (mo_share < upper_bound) & idx_1
+            predictions[idx_1_confirmed] = 2
 
         return predictions
 

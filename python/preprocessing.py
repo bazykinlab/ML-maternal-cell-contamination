@@ -188,7 +188,7 @@ def process_vcf(df, sample, mother, father, contamination_factor=None, return_id
 
     to_drop = ["INFO", "ID", "QUAL", "FILTER", "FORMAT"]
     field_names = ["#CHROM", "POS", "INFO", "INFO", "ID", "QUAL", "FILTER", "FORMAT", "REF", "ALT"]
-    sample_columns = [mother, father, sample]
+    sample_columns = [sample, mother, father]
 
     info_dicts = df["INFO"].apply(split_info).values
 
@@ -268,9 +268,9 @@ def process_vcf(df, sample, mother, father, contamination_factor=None, return_id
 def load_suffix(suffix, data_dir, keep_cols=['justchild^GT']):
     contamination_factor = float("0." + suffix.split(".")[1])
     ab = VCF(data_dir + "abortus." + suffix)
-    ab.process("mother", "father", "abortus", contamination_factor)
+    ab.process("abortus", "mother", "father", contamination_factor)
     gt = VCF(data_dir + "justchild." + suffix)
-    gt.process("mother", "father", "justchild", contamination_factor)
+    gt.process("justchild", "mother", "father", contamination_factor)
 
     for vcf in [ab, gt]:
         vcf.df_processed = index_by_chrom_and_pos(vcf.df_processed)
