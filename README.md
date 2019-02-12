@@ -22,7 +22,7 @@ usage: main.py [-h] [-v] [-r] [-c] [--model_path MODEL_PATH]
 positional arguments:
   path                  path to input VCF file
   sample_name           name of sample column in VCF file
-  mother_name           name of mather column in VCF file
+  mother_name           name of mother column in VCF file
   father_name           name of father column in VCF file
 
 optional arguments:
@@ -37,7 +37,7 @@ optional arguments:
   --method {xgboost,logistic-regression,confidence-intervals,meta-classifier}
                         recalibration method
   --contamination CONTAMINATION
-                        provided contamination estimate
+                        user provided contamination estimate (calculated otherwise)
   --output OUTPUT       path to output VCF file
   --GQ_sa GQ_SA         Genotype quality cutoff to use when estimating
                         contamination (sample column)
