@@ -27,7 +27,7 @@ class VCF:
         self.row_idx = None
         self.estimated_contamination = None
         
-    def process(self, sample,  mother, father, contamination_factor=None):
+    def process(self, sample,  mother, father, contamination_factor=None, param_dict=None):
         """ Preprocess a VCF read from a file
 
         Args:
@@ -44,7 +44,17 @@ class VCF:
         else:
             self.df_processed, self.row_idx = process_vcf(self.df, sample, mother, father,
                                                           return_idx=True)
-            self.estimated_contamination = calculate_contamination(self.df_processed, sample, mother, father)
+            if param_dict:
+                self.estimated_contamination = calculate_contamination(self.df_processed, sample, mother, father,
+                                                                       param_dict["GQ_sa"],
+                                                                       param_dict["GQ_mo"],
+                                                                       param_dict["GQ_fa"],
+                                                                       param_dict["DP_sa"],
+                                                                       param_dict["DP_mo"],
+                                                                       param_dict["DP_fa"],
+                                                                       param_dict["mode"])
+            else:
+                self.estimated_contamination = calculate_contamination(self.df_processed, sample, mother, father)
             self.df_processed['contamination'] = self.estimated_contamination
 
     def save_predictions(self, preds, filename, sample):
