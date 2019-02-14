@@ -88,25 +88,6 @@ class VCF:
     def prepare_input(self, target_cols=[]):
         return prepare_input(self.df_processed, target_cols)
 
-
-def get_suffixes(data_dir):
-    """
-    Scan a dir for pairs of vcf files with the naming scheme
-    `abortus/justchild.{suffix}.trio.vcf` and list all suffixes
-    """
-    suffixes_ab = []
-    suffixes_gt = []
-
-    for filename in os.listdir(data_dir):
-        if filename.endswith("trio.vcf"):
-            if filename.startswith("abortus"):
-                suffixes_ab.append(".".join(filename.split(".")[1:]))
-            elif filename.startswith("justchild"):
-                suffixes_gt.append(".".join(filename.split(".")[1:]))
-
-    assert sorted(suffixes_ab) == sorted(suffixes_gt)
-    return suffixes_ab
-
 def read_vcf(vcf, return_header=False):
     """
     Parse a vcf file, ignoring header by default,  and load it into a pandas
@@ -274,6 +255,24 @@ def process_vcf(df, sample, mother, father, contamination_factor=None, return_id
         return df, keep_rows
 
     return df
+
+def get_suffixes(data_dir):
+    """
+    Scan a dir for pairs of vcf files with the naming scheme
+    `abortus/justchild.{suffix}.trio.vcf` and list all suffixes
+    """
+    suffixes_ab = []
+    suffixes_gt = []
+
+    for filename in os.listdir(data_dir):
+        if filename.endswith("trio.vcf"):
+            if filename.startswith("abortus"):
+                suffixes_ab.append(".".join(filename.split(".")[1:]))
+            elif filename.startswith("justchild"):
+                suffixes_gt.append(".".join(filename.split(".")[1:]))
+
+    assert sorted(suffixes_ab) == sorted(suffixes_gt)
+    return suffixes_ab
 
 def load_suffix(suffix, data_dir, keep_cols=['justchild^GT']):
     contamination_factor = float("0." + suffix.split(".")[1])
