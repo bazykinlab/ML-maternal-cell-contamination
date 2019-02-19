@@ -1,6 +1,6 @@
 # ML-maternal-cell-contamination
 
-This repository consists of three parts:
+This repository contains accompanying code for the paper [Accurate Fetal Variant Calling in the Presence of Maternal Cell Contamination](https://www.biorxiv.org/content/10.1101/552414v1). It consists of three parts:
 
 1. Utilities for:
 	* Working with VCF files
