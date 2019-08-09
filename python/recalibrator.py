@@ -5,7 +5,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import pickle
 
-from confidence_intervals import ConfidenceIntervalClassifier
 from mle import MLEClassifier
 
 class Recalibrator:
@@ -15,14 +14,13 @@ class Recalibrator:
         model_lr: Logistic Regression model (scikit-learn)
         model_xgb: XGBoost model
     """
-    def __init__(self, ci_idx=[19, 20, 21, 22]):
+    def __init__(self, idx=[19, 20]):
         """ Initialize classifiers
         """
         self.model_lr = LogisticRegression(random_state=0)
-        self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1) 
-        self.model_ci = ConfidenceIntervalClassifier(idx=ci_idx)
-        self.model_mle = MLEClassifier(idx=ci_idx)
-        self.model_meta = VotingClassifier([('mle', MLEClassifier(idx=ci_idx)), ('lr', LogisticRegression(random_state=0)), ('xgb', XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1))],
+        self.model_xgb = XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1)
+        self.model_mle = MLEClassifier(idx=idx)
+        self.model_meta = VotingClassifier([('mle', MLEClassifier(idx=idx)), ('lr', LogisticRegression(random_state=0)), ('xgb', XGBClassifier(max_depth=6, learning_rate=0.1, n_estimators=1000, n_jobs=-1, subsample=0.8, colsample_bytree=1))],
                                            voting='soft')
         self.scaler = StandardScaler()
 
