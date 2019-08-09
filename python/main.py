@@ -19,7 +19,7 @@ if __name__ == '__main__':
 	parser.add_argument("--model_path", help="path to saved recalibrator model", default="../model.pickle")
 	parser.add_argument("--method", help="recalibration method",
 									choices=["xgboost", "logistic-regression", "confidence-intervals", "meta-classifier"],
-									default="xgboost")
+									default="meta-classifier")
 	parser.add_argument("--contamination", help="provided contamination estimate")
 	parser.add_argument("--output", help="path to output VCF file")
 
