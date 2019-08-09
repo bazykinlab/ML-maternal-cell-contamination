@@ -2,13 +2,14 @@ def calculate_contamination(df,
                  sample_name,
                  mother_name,
                  father_name,
-                 sample_gq_threshold=-1,
+                 sample_gq_threshold=30,
                  mother_gq_threshold=30, 
                  father_gq_threshold=30,
                  sample_dp_threshold=10,
                  mother_dp_threshold=10,
                  father_dp_threshold=10,
                  mode='micro',
+                 adjust=False,
                  verbose=False):
     
     assert mode in ['micro', 'macro']
@@ -33,12 +34,18 @@ def calculate_contamination(df,
         df1 = df[cond].copy()
         counts.append(len(df1))
         
+        if adjust:
+            motherImpurity = float(df1[mother_name +'^AD'+str(fa_allele)].sum())/df1[mother_name + '^DP'].sum()
+
         if mode == 'macro':
             mean_mother_allele_share = (df1[sample_name+'^AD{}'.format(mo_allele)]/df1[sample_name+'^DP']).mean()
             
         elif mode == 'micro':
             mean_mother_allele_share = float(df1[sample_name+'^AD{}'.format(mo_allele)].sum())/df1[sample_name + '^DP'].sum()
             
+        if adjust:
+            mean_mother_allele_share /= 1-2*motherImpurity
+
         mccs.append(2*mean_mother_allele_share-1)
         
     contamination = (mccs[0]*counts[0] + mccs[1]*counts[1])/sum(counts)
