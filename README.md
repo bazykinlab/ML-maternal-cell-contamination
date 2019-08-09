@@ -11,6 +11,13 @@ This repository contains accompanying code for the paper [Accurate Fetal Variant
 
 3. A CLI script for genotype recalibration. See `python/main.py`.
 
+
+## Dataset
+
+The dataset containing simulated contaminated samples trios and corresponding "pure child" samples is available [here](https://archive.org/details/simulated_maternal_cell_contamination) ([direct download link](https://archive.org/download/simulated_maternal_cell_contamination/simulated_maternal_cell_contamination.tar)). For training, place the `data` directory into the root of the repository.
+
+## Usage
+
 ```
 usage: main.py [-h] [-v] [-r] [-c] [--model_path MODEL_PATH]
                [--method {xgboost,logistic-regression,confidence-intervals,meta-classifier}]
